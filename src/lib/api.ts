@@ -1,6 +1,29 @@
-// Typed API Client with High-Performance Memory Cache & In-Flight Request Deduplication
+// Typed API Client with High-Performance Memory Cache, In-Flight Request Deduplication, & Client-Side LocalStorage Fallback
+import { handleMockApiRequest } from './mockEngine.js';
 
 const API_BASE = '/api';
+
+// Detect if running in static/Vercel/frontend-only environment
+let isServerUnavailable = false;
+if (typeof window !== 'undefined') {
+  const host = window.location.hostname;
+  if (
+    host.includes('vercel.app') ||
+    host.includes('github.io') ||
+    host.includes('netlify.app') ||
+    localStorage.getItem('mueen_frontend_only') === 'true'
+  ) {
+    isServerUnavailable = true;
+  }
+}
+
+export function setFrontendOnlyMode(enabled: boolean): void {
+  isServerUnavailable = enabled;
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('mueen_frontend_only', enabled ? 'true' : 'false');
+  }
+  clearApiCache();
+}
 
 export function getAuthToken(): string | null {
   return localStorage.getItem('mueen_token');
@@ -69,11 +92,47 @@ export async function apiRequest<T = any>(
   }
 
   const requestPromise = (async () => {
+    // If running in Frontend-Only mode (e.g. Vercel static or server absent), execute via in-browser Mock Engine
+    if (isServerUnavailable) {
+      const mockRes = handleMockApiRequest(endpoint, { ...options, headers });
+      if (method === 'GET' && !options.headers && mockRes.success) {
+        const cacheKey = `${endpoint}_${token || 'guest'}`;
+        memoryCache.set(cacheKey, { data: mockRes, timestamp: Date.now() });
+      }
+      if (method !== 'GET') {
+        clearApiCache();
+      }
+      return mockRes;
+    }
+
     try {
       const res = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
         headers
       });
+
+      // If server returns 404 (e.g. server route not found or running on Vercel static)
+      if (res.status === 404 || res.status === 502 || res.status === 503) {
+        console.warn(`[API] Server returned ${res.status} for ${endpoint}. Falling back to Frontend-Only LocalStorage mode.`);
+        isServerUnavailable = true;
+        const mockRes = handleMockApiRequest(endpoint, { ...options, headers });
+        if (method === 'GET' && !options.headers && mockRes.success) {
+          const cacheKey = `${endpoint}_${token || 'guest'}`;
+          memoryCache.set(cacheKey, { data: mockRes, timestamp: Date.now() });
+        }
+        if (method !== 'GET') {
+          clearApiCache();
+        }
+        return mockRes;
+      }
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        console.warn(`[API] Non-JSON response on ${endpoint}. Falling back to Frontend-Only LocalStorage mode.`);
+        isServerUnavailable = true;
+        const mockRes = handleMockApiRequest(endpoint, { ...options, headers });
+        return mockRes;
+      }
 
       const data = await res.json();
       if (!res.ok) {
@@ -98,11 +157,17 @@ export async function apiRequest<T = any>(
 
       return data;
     } catch (err: any) {
-      console.error(`API Error on ${endpoint}:`, err);
-      return {
-        success: false,
-        error: 'تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت.'
-      };
+      console.warn(`[API] Network/fetch error on ${endpoint}. Falling back to Frontend-Only LocalStorage mode:`, err?.message);
+      isServerUnavailable = true;
+      const mockRes = handleMockApiRequest(endpoint, { ...options, headers });
+      if (method === 'GET' && !options.headers && mockRes.success) {
+        const cacheKey = `${endpoint}_${token || 'guest'}`;
+        memoryCache.set(cacheKey, { data: mockRes, timestamp: Date.now() });
+      }
+      if (method !== 'GET') {
+        clearApiCache();
+      }
+      return mockRes;
     } finally {
       if (method === 'GET') {
         const cacheKey = `${endpoint}_${token || 'guest'}`;

@@ -28,6 +28,12 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>(initialGroupId || '');
   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
+  useEffect(() => {
+    if (initialGroupId) {
+      setSelectedGroupId(initialGroupId);
+    }
+  }, [initialGroupId]);
   const [students, setStudents] = useState<Student[]>([]);
   const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: 'present' | 'absent' | 'late' | 'excused'; note: string }>>({});
   const [loading, setLoading] = useState(true);

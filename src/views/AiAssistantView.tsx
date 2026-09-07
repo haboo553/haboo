@@ -21,10 +21,26 @@ import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { printDocument } from '../lib/exportUtils.js';
 
-export const AiAssistantView: React.FC = () => {
+interface AiAssistantViewProps {
+  initialTool?: 'prep' | 'quiz' | 'simplify' | 'diagnostic' | 'remediation';
+  initialStudentId?: string;
+  initialGroupId?: string;
+}
+
+export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
+  initialTool,
+  initialStudentId,
+  initialGroupId
+}) => {
   const { teacher } = useAuth();
   const { showToast } = useToast();
-  const [activeTool, setActiveTool] = useState<'prep' | 'quiz' | 'simplify' | 'diagnostic' | 'remediation'>('prep');
+  const [activeTool, setActiveTool] = useState<'prep' | 'quiz' | 'simplify' | 'diagnostic' | 'remediation'>(initialTool || 'prep');
+
+  useEffect(() => {
+    if (initialTool) {
+      setActiveTool(initialTool);
+    }
+  }, [initialTool]);
 
   // Groups and Students for context
   const [groups, setGroups] = useState<any[]>([]);
@@ -74,14 +90,22 @@ export const AiAssistantView: React.FC = () => {
     ]).then(([grRes, stRes]) => {
       if (grRes.success && grRes.data) {
         setGroups(grRes.data);
-        if (grRes.data.length > 0) setRemGroupId(grRes.data[0].id);
+        if (initialGroupId) {
+          setRemGroupId(initialGroupId);
+        } else if (grRes.data.length > 0) {
+          setRemGroupId(grRes.data[0].id);
+        }
       }
       if (stRes.success && stRes.data) {
         setStudents(stRes.data);
-        if (stRes.data.length > 0) setDiagStudentId(stRes.data[0].id);
+        if (initialStudentId) {
+          setDiagStudentId(initialStudentId);
+        } else if (stRes.data.length > 0) {
+          setDiagStudentId(stRes.data[0].id);
+        }
       }
     });
-  }, []);
+  }, [initialStudentId, initialGroupId]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

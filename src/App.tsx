@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { ToastProvider } from './context/ToastContext.js';
 
@@ -6,6 +6,7 @@ import { ToastProvider } from './context/ToastContext.js';
 import { Sidebar } from './components/Sidebar.js';
 import { Navbar } from './components/Navbar.js';
 import { MobileBottomNav } from './components/MobileBottomNav.js';
+import { MobileDrawer } from './components/MobileDrawer.js';
 
 // Global Modals
 import { GlobalSearchModal } from './components/GlobalSearchModal.js';
@@ -38,11 +39,18 @@ const MainAppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedAttendanceGroupId, setSelectedAttendanceGroupId] = useState<string | undefined>(undefined);
+  const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string>('all');
+  const [aiAssistantParams, setAiAssistantParams] = useState<{
+    tool?: 'prep' | 'quiz' | 'simplify' | 'diagnostic' | 'remediation';
+    studentId?: string;
+    groupId?: string;
+  }>({});
 
-  // Modals state
+  // Modals & Drawers state
   const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // Dynamic Modals data
   const [lessonPrepData, setLessonPrepData] = useState<{ isOpen: boolean; lessonId: string; title: string; subject: string }>({
@@ -62,6 +70,25 @@ const MainAppContent: React.FC = () => {
     groupName: '',
     groupCode: ''
   });
+
+  // Global Keyboard Shortcut: Cmd+K / Ctrl+K for instant search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Sync initial tab for admin
+  useEffect(() => {
+    if (user?.role === 'admin' && activeTab === 'dashboard') {
+      setActiveTab('admin-dashboard');
+    }
+  }, [user?.role]);
 
   if (loading) {
     return (
@@ -88,10 +115,23 @@ const MainAppContent: React.FC = () => {
 
   const handleNavigate = (tab: string, extra?: any) => {
     setSelectedStudentId(null);
-    if (tab === 'attendance' && extra?.groupId) {
+    const sanitizedTab = (tab || 'dashboard').replace(/^\//, '');
+
+    if (sanitizedTab === 'attendance' && extra?.groupId) {
       setSelectedAttendanceGroupId(extra.groupId);
     }
-    setActiveTab(tab);
+    if (sanitizedTab === 'students' && extra?.groupId) {
+      setSelectedStudentGroupId(extra.groupId);
+    }
+    if (extra?.tool || extra?.studentId || extra?.groupId) {
+      setAiAssistantParams({
+        tool: extra.tool,
+        studentId: extra.studentId,
+        groupId: extra.groupId
+      });
+    }
+
+    setActiveTab(sanitizedTab);
   };
 
   const handleOpenLessonPrep = (lessonId?: string, title?: string, subject?: string) => {
@@ -138,10 +178,14 @@ const MainAppContent: React.FC = () => {
           onOpenSearch={() => setSearchOpen(true)}
           onOpenNotifications={() => setNotificationsOpen(true)}
           onOpenUpgrade={() => setUpgradeOpen(true)}
+          onToggleMobileMenu={() => setMobileDrawerOpen(prev => !prev)}
           activeTab={selectedStudentId ? 'student-profile' : activeTab}
           onQuickAction={(action) => {
             if (action === 'ai-prep') handleOpenLessonPrep();
-            if (action === 'add-student') handleNavigate('students');
+            if (action === 'add-student') {
+              setSelectedStudentId(null);
+              handleNavigate('students');
+            }
           }}
         />
 
@@ -176,6 +220,7 @@ const MainAppContent: React.FC = () => {
               onBack={() => setSelectedStudentId(null)}
               onOpenParentMessage={handleOpenParentMessage}
               onOpenAiStudentAnalysis={(student) => {
+                setAiAssistantParams({ tool: 'diagnostic', studentId: student.id });
                 handleNavigate('ai-assistant');
               }}
             />
@@ -185,7 +230,10 @@ const MainAppContent: React.FC = () => {
                 <DashboardView
                   onNavigate={handleNavigate}
                   onOpenLessonPrep={handleOpenLessonPrep}
-                  onOpenAddStudent={() => handleNavigate('students')}
+                  onOpenAddStudent={() => {
+                    setSelectedStudentId(null);
+                    handleNavigate('students');
+                  }}
                   onOpenAttendance={(groupId) => {
                     setSelectedAttendanceGroupId(groupId);
                     handleNavigate('attendance');
@@ -208,13 +256,15 @@ const MainAppContent: React.FC = () => {
                 <GroupsView
                   onOpenQrModal={handleOpenQrModal}
                   onNavigateToStudents={(groupId) => {
-                    handleNavigate('students');
+                    setSelectedStudentGroupId(groupId);
+                    handleNavigate('students', { groupId });
                   }}
                   onOpenAttendance={(groupId) => {
                     setSelectedAttendanceGroupId(groupId);
                     handleNavigate('attendance');
                   }}
                   onOpenAiGroupAnalysis={(group) => {
+                    setAiAssistantParams({ tool: 'remediation', groupId: group.id });
                     handleNavigate('ai-assistant');
                   }}
                 />
@@ -222,9 +272,11 @@ const MainAppContent: React.FC = () => {
 
               {activeTab === 'students' && (
                 <StudentsView
+                  initialGroupId={selectedStudentGroupId}
                   onSelectStudent={handleSelectStudent}
                   onOpenParentMessage={handleOpenParentMessage}
                   onOpenAiStudentAnalysis={(student) => {
+                    setAiAssistantParams({ tool: 'diagnostic', studentId: student.id });
                     handleNavigate('ai-assistant');
                   }}
                 />
@@ -245,7 +297,10 @@ const MainAppContent: React.FC = () => {
 
               {activeTab === 'exams' && (
                 <ExamsView
-                  onOpenAiQuizGenerator={() => handleNavigate('ai-assistant')}
+                  onOpenAiQuizGenerator={() => {
+                    setAiAssistantParams({ tool: 'quiz' });
+                    handleNavigate('ai-assistant');
+                  }}
                 />
               )}
 
@@ -253,7 +308,13 @@ const MainAppContent: React.FC = () => {
 
               {activeTab === 'evaluations' && <EvaluationsView />}
 
-              {activeTab === 'ai-assistant' && <AiAssistantView />}
+              {activeTab === 'ai-assistant' && (
+                <AiAssistantView
+                  initialTool={aiAssistantParams.tool}
+                  initialStudentId={aiAssistantParams.studentId}
+                  initialGroupId={aiAssistantParams.groupId}
+                />
+              )}
 
               {activeTab === 'reports' && <ReportsView />}
 
@@ -263,7 +324,12 @@ const MainAppContent: React.FC = () => {
                 />
               )}
 
-              {activeTab === 'admin' && <AdminDashboardView />}
+              {(activeTab === 'admin' || activeTab.startsWith('admin-')) && (
+                <AdminDashboardView
+                  initialTab={activeTab}
+                  onNavigate={handleNavigate}
+                />
+              )}
 
               {activeTab === 'settings' && <SettingsView />}
             </>
@@ -274,8 +340,18 @@ const MainAppContent: React.FC = () => {
         <MobileBottomNav
           activeTab={selectedStudentId ? 'students' : activeTab}
           onNavigate={handleNavigate}
+          onToggleMenu={() => setMobileDrawerOpen(prev => !prev)}
         />
       </div>
+
+      {/* Responsive Mobile Navigation Drawer */}
+      <MobileDrawer
+        isOpen={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        activeTab={selectedStudentId ? 'students' : activeTab}
+        onNavigate={handleNavigate}
+        onOpenUpgrade={() => setUpgradeOpen(true)}
+      />
 
       {/* Global Modals */}
       <GlobalSearchModal

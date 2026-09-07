@@ -18,13 +18,28 @@ import { apiRequest } from '../lib/api.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 
-export const AdminDashboardView: React.FC = () => {
+interface AdminDashboardViewProps {
+  initialTab?: string;
+  onNavigate?: (tab: string) => void;
+}
+
+export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
+  initialTab,
+  onNavigate
+}) => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [stats, setStats] = useState<any>(null);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeSubTab, setActiveSubTab] = useState<string>(initialTab || 'admin-dashboard');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveSubTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Broadcast Message State
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -88,6 +103,13 @@ export const AdminDashboardView: React.FC = () => {
     }
   };
 
+  const handleTabChange = (tabId: string) => {
+    setActiveSubTab(tabId);
+    if (onNavigate) {
+      onNavigate(tabId);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* Admin Header */}
@@ -105,11 +127,38 @@ export const AdminDashboardView: React.FC = () => {
 
         <button
           onClick={fetchAdminData}
-          className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-2xl border border-slate-700 transition-colors flex items-center gap-2 text-xs font-bold"
+          className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-2xl border border-slate-700 transition-colors flex items-center gap-2 text-xs font-bold shrink-0"
         >
           <RefreshCw className="w-4 h-4" />
           <span>تحديث الإحصاءات</span>
         </button>
+      </div>
+
+      {/* Admin Subtabs Bar */}
+      <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 overflow-x-auto">
+        {[
+          { id: 'admin-dashboard', label: 'لوحة التحكم والمؤشرات', icon: ShieldCheck },
+          { id: 'admin-teachers', label: `إدارة المعلمين والاشتراكات (${teachers.length})`, icon: GraduationCap },
+          { id: 'admin-plans', label: 'الباقات والأسعار', icon: Crown },
+          { id: 'admin-logs', label: `سجلات الأمان والنشاط (${auditLogs.length})`, icon: Activity }
+        ].map(tab => {
+          const Icon = tab.icon;
+          const active = activeSubTab === tab.id || (activeSubTab === 'admin' && tab.id === 'admin-dashboard');
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                active
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${active ? 'text-emerald-400' : 'text-slate-400'}`} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Global SaaS KPIs */}
@@ -151,10 +200,70 @@ export const AdminDashboardView: React.FC = () => {
         </div>
       </div>
 
+      {/* Subtab Content Routing */}
+      {activeSubTab === 'admin-plans' && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-6">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Crown className="w-5 h-5 text-amber-500" />
+              <h3 className="font-extrabold text-sm text-slate-900">إعدادات وباقات اشتراك المعلمين (SaaS Pricing & Tiers)</h3>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
+              <div className="flex justify-between items-center">
+                <h4 className="font-extrabold text-slate-900">التجربة المجانية (Trial)</h4>
+                <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-bold">14 يوماً</span>
+              </div>
+              <div className="text-2xl font-black text-slate-900">0 <span className="text-xs font-normal text-slate-500">ج.م</span></div>
+              <ul className="text-xs text-slate-600 space-y-1.5 pt-2">
+                <li>• حتى 30 طالباً</li>
+                <li>• 3 مجموعات دراسية</li>
+                <li>• 20 عملية ذكاء اصطناعي</li>
+                <li>• رصد الحضور والاختبارات</li>
+              </ul>
+            </div>
+
+            <div className="p-5 rounded-2xl border-2 border-emerald-600 bg-emerald-50/30 space-y-3 relative">
+              <span className="absolute -top-3 left-4 bg-emerald-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                الأكثر طلباً
+              </span>
+              <div className="flex justify-between items-center">
+                <h4 className="font-extrabold text-emerald-950">المعلم المحترف (Pro)</h4>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">شهري / سنوي</span>
+              </div>
+              <div className="text-2xl font-black text-emerald-700">199 <span className="text-xs font-normal text-slate-500">ج.م / شهرياً</span></div>
+              <ul className="text-xs text-slate-700 space-y-1.5 pt-2">
+                <li>• حتى 250 طالباً</li>
+                <li>• مجموعات غير محدودة</li>
+                <li>• تحضير ذكي غير محدود بالذكاء الاصطناعي</li>
+                <li>• تقارير PDF وإشعارات واتساب مخصصة</li>
+              </ul>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-purple-200 bg-purple-50/30 space-y-3">
+              <div className="flex justify-between items-center">
+                <h4 className="font-extrabold text-purple-950">السنتر التعليمي (Enterprise)</h4>
+                <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold">للمراكز والمدارس</span>
+              </div>
+              <div className="text-2xl font-black text-purple-700">499 <span className="text-xs font-normal text-slate-500">ج.م / شهرياً</span></div>
+              <ul className="text-xs text-slate-700 space-y-1.5 pt-2">
+                <li>• طلاب غير محدودين</li>
+                <li>• صلاحيات متعددة للمساعدين والسكرتارية</li>
+                <li>• تقارير مالية مجمعة وخزينة إلكترونية</li>
+                <li>• دعم فني مخصص وأولوية في معالجة الذكاء الاصطناعي</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Teachers Directory & Broadcast Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${activeSubTab === 'admin-teachers' ? 'lg:grid-cols-1' : 'lg:grid-cols-3'} gap-6`}>
         {/* Teachers Directory */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
+        {(activeSubTab === 'admin-dashboard' || activeSubTab === 'admin-teachers' || activeSubTab === 'admin') && (
+        <div className={`${activeSubTab === 'admin-teachers' ? 'lg:col-span-1' : 'lg:col-span-2'} bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4`}>
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Users2 className="w-5 h-5 text-emerald-700" />
@@ -217,6 +326,7 @@ export const AdminDashboardView: React.FC = () => {
             </table>
           </div>
         </div>
+        )}
 
         {/* Global Broadcast Box */}
         <div className="space-y-6">

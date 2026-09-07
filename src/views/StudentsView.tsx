@@ -42,6 +42,12 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   const [selectedGroupId, setSelectedGroupId] = useState<string>(initialGroupId || 'all');
   const [selectedPerformance, setSelectedPerformance] = useState<string>('all');
 
+  useEffect(() => {
+    if (initialGroupId) {
+      setSelectedGroupId(initialGroupId);
+    }
+  }, [initialGroupId]);
+
   // Add Student Modal
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
