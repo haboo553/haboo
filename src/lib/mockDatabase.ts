@@ -1,4 +1,4 @@
-import initialData from '../../data-store.json';
+import { initialData } from './initialData';
 import {
   User,
   TeacherProfile,
