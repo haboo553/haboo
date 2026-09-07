@@ -1,0 +1,10 @@
+{
+  "name": "مُعين - المساعد الذكي للمدرس",
+  "description": "منصة SaaS متكاملة وتطبيق ذكي للمدرسين لإدارة الطلاب والحصص والمجموعات والحضور والاختبارات والتقييمات والتواصل مع أولياء الأمور مع مساعد الذكاء الاصطناعي.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
