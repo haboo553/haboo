@@ -1,18 +1,16 @@
 // Typed API Client with High-Performance Memory Cache, In-Flight Request Deduplication, & Client-Side LocalStorage Fallback
-import { handleMockApiRequest } from './mockEngine.js';
+import { handleMockApiRequest } from './mockEngine';
 
 const API_BASE = '/api';
 
 // Detect if running in static/Vercel/frontend-only environment
+// In Cloud Run (AI Studio container) or localhost:3000, express server.ts is running.
+// On Vercel (*.vercel.app), GitHub Pages, or any static hosting, enable Frontend-Only LocalStorage immediately.
 let isServerUnavailable = false;
 if (typeof window !== 'undefined') {
   const host = window.location.hostname;
-  if (
-    host.includes('vercel.app') ||
-    host.includes('github.io') ||
-    host.includes('netlify.app') ||
-    localStorage.getItem('mueen_frontend_only') === 'true'
-  ) {
+  const isBackendAvailable = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.run.app');
+  if (!isBackendAvailable || localStorage.getItem('mueen_frontend_only') === 'true') {
     isServerUnavailable = true;
   }
 }
@@ -134,7 +132,15 @@ export async function apiRequest<T = any>(
         return mockRes;
       }
 
-      const data = await res.json();
+      let data: any;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        console.warn(`[API] JSON parse error on ${endpoint}. Falling back to Frontend-Only mode.`);
+        isServerUnavailable = true;
+        const mockRes = handleMockApiRequest(endpoint, { ...options, headers });
+        return mockRes;
+      }
       if (!res.ok) {
         return {
           success: false,
